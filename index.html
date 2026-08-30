@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Pong Arena helps players create and manage ping pong tournaments, brackets, scores, and winners.">
+  <title>Pong Arena</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav-bar" aria-label="Main navigation">
+      <a class="brand" href="#" aria-label="Pong Arena home">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>Pong Arena</span>
+      </a>
+
+      <button class="nav-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+
+      <div class="nav-links" id="nav-links">
+        <button class="nav-button" type="button" data-start-endless>Endless Mode</button>
+        <button class="nav-button" type="button" data-sound-toggle aria-pressed="true">Sound: On</button>
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How It Works</a>
+        <a class="nav-cta" href="#create">Create Tournament</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" id="create">
+      <div class="hero-copy">
+        <p class="eyebrow">Club nights. Office leagues. Weekend showdowns.</p>
+        <h1>Pong Arena</h1>
+        <p class="tagline">Create and manage ping pong tournaments with sleek brackets, live score tracking, and winner history built for competitive play.</p>
+
+        <div class="hero-actions">
+          <button class="button button-primary" type="button" data-start-endless>Endless Mode</button>
+          <button class="button button-secondary" type="button" data-create-tournament>Create Tournament</button>
+          <a class="button button-secondary" href="#how-it-works">How It Works</a>
+        </div>
+
+        <p class="status-message" data-status-message aria-live="polite"></p>
+      </div>
+
+      <div class="arena-preview" aria-label="Tournament dashboard preview">
+        <div class="scoreboard">
+          <div>
+            <span class="score-label">Final Table</span>
+            <strong>12</strong>
+          </div>
+          <div>
+            <span class="score-label">Rally Club</span>
+            <strong>10</strong>
+          </div>
+        </div>
+
+        <div class="table-visual" aria-hidden="true">
+          <span class="table-line center-line"></span>
+          <span class="table-line net-line"></span>
+          <span class="paddle paddle-left"></span>
+          <span class="paddle paddle-right"></span>
+          <span class="ball"></span>
+        </div>
+
+        <div class="match-strip">
+          <span>Round 3</span>
+          <strong>Semifinal</strong>
+          <span>Best of 5</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="game-screen" data-difficulty-screen hidden>
+      <div class="game-shell">
+        <div class="game-topbar">
+          <div>
+            <p class="eyebrow">Endless Mode</p>
+            <h2>Choose Your Difficulty</h2>
+          </div>
+
+          <button class="button button-secondary compact-button" type="button" data-difficulty-back>Back</button>
+        </div>
+
+        <div class="feature-grid difficulty-grid">
+          <button class="feature-card difficulty-card" type="button" data-difficulty-select="easy">
+            <span class="feature-icon" aria-hidden="true">○</span>
+            <h3>Easy</h3>
+            <p>Slower AI reactions and a gentler starting pace. A relaxed rally built for warming up.</p>
+          </button>
+
+          <button class="feature-card difficulty-card" type="button" data-difficulty-select="medium">
+            <span class="feature-icon" aria-hidden="true">◐</span>
+            <h3>Medium</h3>
+            <p>Balanced AI tracking and a standard starting pace. The default Pong Arena challenge.</p>
+          </button>
+
+          <button class="feature-card difficulty-card" type="button" data-difficulty-select="hard">
+            <span class="feature-icon" aria-hidden="true">●</span>
+            <h3>Hard</h3>
+            <p>Faster, more accurate AI and a quicker starting pace. Tough, but still fair to beat.</p>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="game-screen" data-game-screen hidden>
+      <div class="game-shell">
+        <div class="game-topbar">
+          <div>
+            <p class="eyebrow">Endless Mode</p>
+            <h2>Stay on the table</h2>
+          </div>
+
+          <div class="game-stats" aria-label="Endless Mode stats">
+            <div>
+              <span>Score</span>
+              <strong data-score>0</strong>
+            </div>
+            <div>
+              <span>Best</span>
+              <strong data-high-score>0</strong>
+            </div>
+            <div>
+              <span>Pace</span>
+              <strong data-difficulty>1</strong>
+            </div>
+          </div>
+
+          <button class="button button-secondary compact-button" type="button" data-main-menu>Main Menu</button>
+        </div>
+
+        <div class="court-wrap">
+          <canvas class="pong-court" data-pong-canvas width="960" height="540" aria-label="Endless Mode Pong game"></canvas>
+
+          <div class="power-meter" data-power aria-label="Power meter">
+            <div class="power-meter-row">
+              <span class="power-meter-label">Power · Z</span>
+              <span class="power-meter-percent" data-power-percent>0%</span>
+            </div>
+            <div class="power-meter-track">
+              <div class="power-meter-fill" data-power-fill></div>
+            </div>
+          </div>
+
+          <div class="game-over" data-game-over hidden>
+            <div class="game-over-card">
+              <p class="eyebrow" data-record-label></p>
+              <h2>Game Over</h2>
+              <div class="result-grid">
+                <div>
+                  <span>Final Score</span>
+                  <strong data-final-score>0</strong>
+                </div>
+                <div>
+                  <span>Best Score</span>
+                  <strong data-final-best>0</strong>
+                </div>
+              </div>
+              <div class="game-over-actions">
+                <button class="button button-primary" type="button" data-play-again>Play Again</button>
+                <button class="button button-secondary" type="button" data-main-menu>Main Menu</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-strip">
+          <span>Move: W/S or Arrow Keys</span>
+          <span>Endless ends when you miss</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="feature-section" id="features">
+      <div class="section-heading">
+        <p class="eyebrow">Tournament Control</p>
+        <h2>Everything a bracket night needs</h2>
+      </div>
+
+      <div class="feature-grid">
+        <article class="feature-card">
+          <span class="feature-icon" aria-hidden="true">+</span>
+          <h3>Create tournaments</h3>
+          <p>Set up a polished tournament hub for singles, doubles, or casual ladder play.</p>
+        </article>
+
+        <article class="feature-card">
+          <span class="feature-icon" aria-hidden="true">[]</span>
+          <h3>Generate brackets</h3>
+          <p>Turn a player list into clean matchups ready for the next round.</p>
+        </article>
+
+        <article class="feature-card">
+          <span class="feature-icon" aria-hidden="true">#</span>
+          <h3>Track scores</h3>
+          <p>Keep every rally, match, and round easy to scan as the action moves fast.</p>
+        </article>
+
+        <article class="feature-card">
+          <span class="feature-icon" aria-hidden="true">*</span>
+          <h3>Track winners</h3>
+          <p>Highlight champions and preserve the final standings after the last serve.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="how-section" id="how-it-works">
+      <div class="how-panel">
+        <div class="section-heading">
+          <p class="eyebrow">How It Works</p>
+          <h2>From signups to champion in three moves</h2>
+        </div>
+
+        <div class="steps">
+          <div class="step">
+            <span>01</span>
+            <p>Add tournament details and invite players.</p>
+          </div>
+          <div class="step">
+            <span>02</span>
+            <p>Generate the bracket and start the first matches.</p>
+          </div>
+          <div class="step">
+            <span>03</span>
+            <p>Track scores until a winner owns the table.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>&copy; 2026 Pong Arena. Built for fast rallies and clean brackets.</p>
+  </footer>
+
+  <script src="js/script.js"></script>
+</body>
+</html>
