@@ -294,6 +294,10 @@ h1 {
   gap: 10px;
 }
 
+.game-stats--two {
+  grid-template-columns: repeat(2, minmax(86px, 1fr));
+}
+
 .result-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(86px, 1fr));
@@ -883,6 +887,10 @@ h1 {
 
   .game-stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .game-stats--two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .game-stats div,

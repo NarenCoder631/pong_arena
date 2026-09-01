@@ -176,6 +176,16 @@ if (soundToggleButton) {
   });
 }
 
+// Shared AI difficulty settings (Easy/Medium/Hard), reused by both Endless
+// Mode and Classic Mode so the two modes never drift out of sync.
+// maxBallSpeed/speedIncrement are Endless-specific (its rally speed ramp);
+// Classic Mode only reads ballSpeed/aiSpeed/aiError/pace from this object.
+const DIFFICULTY_PRESETS = {
+  easy: { ballSpeed: 260, maxBallSpeed: 260, speedIncrement: 0, aiSpeed: 170, aiError: 60, pace: 1 },
+  medium: { ballSpeed: 320, maxBallSpeed: 560, speedIncrement: 12, aiSpeed: 230, aiError: 46, pace: 2 },
+  hard: { ballSpeed: 400, maxBallSpeed: 760, speedIncrement: 16, aiSpeed: 300, aiError: 28, pace: 3 },
+};
+
 /* =========================================================
    Endless Mode — Pong Engine
    Self-contained. Does not touch nav-toggle or Tournament code above.
@@ -213,15 +223,6 @@ if (soundToggleButton) {
   const difficultyBackButton = document.querySelector("[data-difficulty-back]");
 
   const HIGH_SCORE_KEY = "pongArena.endlessBestScore";
-
-  // Fixed starting parameters per difficulty. No in-run ramping yet —
-  // each run uses these values for its whole duration until that's
-  // added as a separate step.
-  const DIFFICULTY_PRESETS = {
-    easy: { ballSpeed: 260, maxBallSpeed: 260, speedIncrement: 0, aiSpeed: 170, aiError: 60, pace: 1 },
-    medium: { ballSpeed: 320, maxBallSpeed: 560, speedIncrement: 12, aiSpeed: 230, aiError: 46, pace: 2 },
-    hard: { ballSpeed: 400, maxBallSpeed: 760, speedIncrement: 16, aiSpeed: 300, aiError: 28, pace: 3 },
-  };
 
   const PLAYER_SPEED = 480;
   const PADDLE_MARGIN = 22;
@@ -803,4 +804,411 @@ if (soundToggleButton) {
     event.preventDefault();
   }
   canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
+})();
+
+/* =========================================================
+   Classic Mode — Traditional Pong
+   Fully self-contained: its own canvas, its own state, its own loop.
+   Does not read from or write to the Endless Mode engine above, so it
+   cannot affect Endless Mode's behavior. It reuses two shared things
+   only: the SFX module, and the shared DIFFICULTY_PRESETS object
+   (same Easy/Medium/Hard AI settings Endless uses). The paddle/ball
+   physics formulas are re-implemented locally (not imported from the
+   Endless engine) so this new mode can never regress it.
+   DOM hooks: [data-start-classic] (x2), [data-classic-difficulty-screen],
+   [data-classic-difficulty-select] (x3), [data-classic-difficulty-back],
+   [data-classic-screen], [data-classic-canvas], [data-classic-player-score],
+   [data-classic-ai-score], [data-classic-main-menu] (x2),
+   [data-classic-game-over], [data-classic-result], [data-classic-result-label],
+   [data-classic-final-player], [data-classic-final-ai], [data-classic-play-again]
+   ========================================================= */
+(function () {
+  const classicScreen = document.querySelector("[data-classic-screen]");
+  const canvas = document.querySelector("[data-classic-canvas]");
+
+  if (!classicScreen || !canvas) return;
+
+  const ctx = canvas.getContext("2d");
+
+  // Two of each of these exist (nav + hero for start; topbar + game-over
+  // card for main menu) — same pattern as Endless Mode's buttons.
+  const startButtons = document.querySelectorAll("[data-start-classic]");
+  const mainMenuButtons = document.querySelectorAll("[data-classic-main-menu]");
+
+  const difficultyScreen = document.querySelector("[data-classic-difficulty-screen]");
+  const difficultyButtons = document.querySelectorAll("[data-classic-difficulty-select]");
+  const difficultyBackButton = document.querySelector("[data-classic-difficulty-back]");
+
+  const playerScoreEl = document.querySelector("[data-classic-player-score]");
+  const aiScoreEl = document.querySelector("[data-classic-ai-score]");
+  const gameOverEl = document.querySelector("[data-classic-game-over]");
+  const resultEl = document.querySelector("[data-classic-result]");
+  const resultLabelEl = document.querySelector("[data-classic-result-label]");
+  const finalPlayerEl = document.querySelector("[data-classic-final-player]");
+  const finalAiEl = document.querySelector("[data-classic-final-ai]");
+  const playAgainButton = document.querySelector("[data-classic-play-again]");
+
+  const WIN_SCORE = 11;
+  const PLAYER_SPEED = 480;
+  const PADDLE_MARGIN = 22;
+  const BALL_RADIUS = 9;
+  const PADDLE_EDGE_GAP = BALL_RADIUS - 2;
+  const MAX_BOUNCE_ANGLE = (55 * Math.PI) / 180;
+
+  const styles = getComputedStyle(document.documentElement);
+  const colors = {
+    line: styles.getPropertyValue("--line").trim() || "rgba(246,251,248,0.13)",
+    coral: styles.getPropertyValue("--coral").trim() || "#ff6b4a",
+    gold: styles.getPropertyValue("--gold").trim() || "#ffd166",
+    blue: styles.getPropertyValue("--blue").trim() || "#7aa7ff",
+  };
+
+  const state = {
+    active: false,
+    width: 0,
+    height: 0,
+    difficulty: "medium",
+    playerScore: 0,
+    aiScore: 0,
+    nextServe: "player",
+    ball: { x: 0, y: 0, vx: 0, vy: 0 },
+    player: { y: 0, height: 110, width: 14 },
+    ai: { y: 0, height: 110, width: 14, tracking: false, errorOffset: 0 },
+    keys: { up: false, down: false },
+    lastTime: 0,
+    rafId: null,
+  };
+
+  function currentDifficulty() {
+    return DIFFICULTY_PRESETS[state.difficulty] || DIFFICULTY_PRESETS.medium;
+  }
+
+  function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    state.width = rect.width;
+    state.height = rect.height;
+
+    state.player.height = Math.max(70, Math.min(140, rect.height * 0.2));
+    state.ai.height = state.player.height;
+    state.player.y = Math.min(state.player.y, rect.height - state.player.height - PADDLE_EDGE_GAP);
+    state.ai.y = Math.min(state.ai.y, rect.height - state.ai.height - PADDLE_EDGE_GAP);
+  }
+
+  // Ball speed stays fixed at the chosen difficulty's starting speed for
+  // the whole match — no Endless-style rally ramp, per spec ("keep the
+  // ball speed balanced... reset normally after each point").
+  function serveBall(towardPlayer) {
+    const { ballSpeed } = currentDifficulty();
+    const angle = (Math.random() * 2 - 1) * (Math.PI / 6);
+    const direction = towardPlayer ? -1 : 1;
+    state.ball.x = state.width / 2;
+    state.ball.y = state.height / 2;
+    state.ball.vx = Math.cos(angle) * ballSpeed * direction;
+    state.ball.vy = Math.sin(angle) * ballSpeed;
+  }
+
+  function resetPositions() {
+    state.player.y = state.height / 2 - state.player.height / 2;
+    state.ai.y = state.height / 2 - state.ai.height / 2;
+    state.ai.tracking = false;
+  }
+
+  function resetMatch() {
+    state.playerScore = 0;
+    state.aiScore = 0;
+    state.nextServe = Math.random() < 0.5 ? "player" : "ai";
+    playerScoreEl && (playerScoreEl.textContent = "0");
+    aiScoreEl && (aiScoreEl.textContent = "0");
+    resetPositions();
+    serveBall(state.nextServe === "ai"); // server's ball moves away from the server
+  }
+
+  function updatePlayer(dt) {
+    let dir = 0;
+    if (state.keys.up) dir -= 1;
+    if (state.keys.down) dir += 1;
+    state.player.y += dir * PLAYER_SPEED * dt;
+    state.player.y = Math.max(
+      PADDLE_EDGE_GAP,
+      Math.min(state.height - state.player.height - PADDLE_EDGE_GAP, state.player.y)
+    );
+  }
+
+  function updateAI(dt, aiSpeed, aiError) {
+    let targetY;
+    if (state.ball.vx > 0) {
+      if (!state.ai.tracking) {
+        state.ai.tracking = true;
+        state.ai.errorOffset = (Math.random() * 2 - 1) * aiError;
+      }
+      targetY = state.ball.y - state.ai.height / 2 + state.ai.errorOffset;
+    } else {
+      state.ai.tracking = false;
+      targetY = state.height / 2 - state.ai.height / 2;
+    }
+    const diff = targetY - state.ai.y;
+    const step = Math.max(-aiSpeed * dt, Math.min(aiSpeed * dt, diff));
+    state.ai.y = Math.max(
+      PADDLE_EDGE_GAP,
+      Math.min(state.height - state.ai.height - PADDLE_EDGE_GAP, state.ai.y + step)
+    );
+  }
+
+  function reflectOffPaddle(paddleY, paddleHeight, incomingSpeed, direction) {
+    const relative = (state.ball.y - (paddleY + paddleHeight / 2)) / (paddleHeight / 2);
+    const clamped = Math.max(-1, Math.min(1, relative));
+    const angle = clamped * MAX_BOUNCE_ANGLE;
+    state.ball.vx = Math.cos(angle) * incomingSpeed * direction;
+    state.ball.vy = Math.sin(angle) * incomingSpeed;
+  }
+
+  function awardPoint(winner) {
+    if (winner === "player") {
+      state.playerScore += 1;
+      playerScoreEl && (playerScoreEl.textContent = String(state.playerScore));
+    } else {
+      state.aiScore += 1;
+      aiScoreEl && (aiScoreEl.textContent = String(state.aiScore));
+    }
+    SFX.play("bonusScore");
+
+    if (state.playerScore >= WIN_SCORE || state.aiScore >= WIN_SCORE) {
+      endMatch(winner);
+      return;
+    }
+
+    // Strict alternation each point — a simple, consistent serve rule.
+    state.nextServe = state.nextServe === "player" ? "ai" : "player";
+    resetPositions();
+    serveBall(state.nextServe === "ai");
+  }
+
+  function update(dt) {
+    const { aiSpeed, aiError, ballSpeed } = currentDifficulty();
+
+    updatePlayer(dt);
+    updateAI(dt, aiSpeed, aiError);
+
+    state.ball.x += state.ball.vx * dt;
+    state.ball.y += state.ball.vy * dt;
+
+    if (state.ball.y - BALL_RADIUS <= 0) {
+      state.ball.y = BALL_RADIUS;
+      state.ball.vy *= -1;
+      SFX.play("wallBounce");
+    } else if (state.ball.y + BALL_RADIUS >= state.height) {
+      state.ball.y = state.height - BALL_RADIUS;
+      state.ball.vy *= -1;
+      SFX.play("wallBounce");
+    }
+
+    const playerX = PADDLE_MARGIN;
+    const aiX = state.width - PADDLE_MARGIN - state.ai.width;
+
+    if (
+      state.ball.vx < 0 &&
+      state.ball.x - BALL_RADIUS <= playerX + state.player.width &&
+      state.ball.x - BALL_RADIUS >= playerX &&
+      state.ball.y >= state.player.y &&
+      state.ball.y <= state.player.y + state.player.height
+    ) {
+      state.ball.x = playerX + state.player.width + BALL_RADIUS;
+      reflectOffPaddle(state.player.y, state.player.height, ballSpeed, 1);
+      SFX.play("playerHit");
+    }
+
+    if (
+      state.ball.vx > 0 &&
+      state.ball.x + BALL_RADIUS >= aiX &&
+      state.ball.x + BALL_RADIUS <= aiX + state.ai.width &&
+      state.ball.y >= state.ai.y &&
+      state.ball.y <= state.ai.y + state.ai.height
+    ) {
+      state.ball.x = aiX - BALL_RADIUS;
+      reflectOffPaddle(state.ai.y, state.ai.height, ballSpeed, -1);
+      SFX.play("aiHit");
+    }
+
+    // Traditional scoring: whoever the ball gets past scores the point.
+    if (state.ball.x + BALL_RADIUS >= state.width) {
+      awardPoint("player");
+      return;
+    }
+    if (state.ball.x - BALL_RADIUS <= 0) {
+      awardPoint("ai");
+    }
+  }
+
+  function drawCourt() {
+    ctx.clearRect(0, 0, state.width, state.height);
+
+    ctx.strokeStyle = colors.line;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 12]);
+    ctx.beginPath();
+    ctx.moveTo(state.width / 2, 0);
+    ctx.lineTo(state.width / 2, state.height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const paddleRadius = state.player.width / 2;
+
+    ctx.fillStyle = colors.coral;
+    ctx.beginPath();
+    ctx.roundRect(PADDLE_MARGIN, state.player.y, state.player.width, state.player.height, paddleRadius);
+    ctx.fill();
+
+    ctx.fillStyle = colors.blue;
+    ctx.beginPath();
+    ctx.roundRect(
+      state.width - PADDLE_MARGIN - state.ai.width,
+      state.ai.y,
+      state.ai.width,
+      state.ai.height,
+      paddleRadius
+    );
+    ctx.fill();
+
+    ctx.fillStyle = colors.gold;
+    ctx.beginPath();
+    ctx.arc(state.ball.x, state.ball.y, BALL_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function loop(timestamp) {
+    if (!state.active) return;
+    if (!state.lastTime) state.lastTime = timestamp;
+    const dt = Math.min(0.033, (timestamp - state.lastTime) / 1000);
+    state.lastTime = timestamp;
+
+    update(dt);
+    drawCourt();
+
+    state.rafId = window.requestAnimationFrame(loop);
+  }
+
+  function startLoop() {
+    state.lastTime = 0;
+    state.rafId = window.requestAnimationFrame(loop);
+  }
+
+  function stopLoop() {
+    if (state.rafId) {
+      window.cancelAnimationFrame(state.rafId);
+      state.rafId = null;
+    }
+  }
+
+  function endMatch(winner) {
+    state.active = false;
+    stopLoop();
+
+    const playerWon = winner === "player";
+    resultEl && (resultEl.textContent = playerWon ? "YOU WIN" : "AI WINS");
+    resultLabelEl && (resultLabelEl.textContent = playerWon ? "Victory" : "Defeat");
+    finalPlayerEl && (finalPlayerEl.textContent = String(state.playerScore));
+    finalAiEl && (finalAiEl.textContent = String(state.aiScore));
+    SFX.play(playerWon ? "newHighScore" : "gameOver");
+
+    gameOverEl && gameOverEl.removeAttribute("hidden");
+  }
+
+  function openDifficultyScreen() {
+    document.body.classList.add("game-active");
+    classicScreen.setAttribute("hidden", "");
+    gameOverEl && gameOverEl.setAttribute("hidden", "");
+    difficultyScreen && difficultyScreen.removeAttribute("hidden");
+  }
+
+  function startMatch(difficulty) {
+    state.difficulty = difficulty;
+
+    difficultyScreen && difficultyScreen.setAttribute("hidden", "");
+    document.body.classList.add("game-active");
+    classicScreen.removeAttribute("hidden");
+    gameOverEl && gameOverEl.setAttribute("hidden", "");
+
+    resizeCanvas();
+    resetMatch();
+
+    state.active = true;
+    startLoop();
+  }
+
+  function exitToMainMenu() {
+    state.active = false;
+    stopLoop();
+    gameOverEl && gameOverEl.setAttribute("hidden", "");
+    classicScreen.setAttribute("hidden", "");
+    difficultyScreen && difficultyScreen.setAttribute("hidden", "");
+    document.body.classList.remove("game-active");
+  }
+
+  startButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      SFX.play("uiClick");
+      openDifficultyScreen();
+    });
+  });
+
+  difficultyButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      SFX.play("uiClick");
+      startMatch(button.dataset.classicDifficultySelect);
+    });
+  });
+
+  difficultyBackButton &&
+    difficultyBackButton.addEventListener("click", () => {
+      SFX.play("uiClick");
+      exitToMainMenu();
+    });
+
+  mainMenuButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      SFX.play("uiClick");
+      exitToMainMenu();
+    });
+  });
+
+  if (playAgainButton) {
+    playAgainButton.addEventListener("click", () => {
+      SFX.play("uiClick");
+      gameOverEl && gameOverEl.setAttribute("hidden", "");
+      resizeCanvas();
+      resetMatch();
+      state.active = true;
+      startLoop();
+    });
+  }
+
+  window.addEventListener("resize", () => {
+    if (state.active) resizeCanvas();
+  });
+
+  // Keyboard only — no mousemove/touchmove listeners exist anywhere in
+  // this module, so mouse and touch simply cannot move this paddle.
+  window.addEventListener("keydown", (event) => {
+    if (!state.active) return;
+    if (event.key === "ArrowUp" || event.key === "w" || event.key === "W") {
+      state.keys.up = true;
+      event.preventDefault();
+    } else if (event.key === "ArrowDown" || event.key === "s" || event.key === "S") {
+      state.keys.down = true;
+      event.preventDefault();
+    }
+  });
+
+  window.addEventListener("keyup", (event) => {
+    if (event.key === "ArrowUp" || event.key === "w" || event.key === "W") {
+      state.keys.up = false;
+    } else if (event.key === "ArrowDown" || event.key === "s" || event.key === "S") {
+      state.keys.down = false;
+    }
+  });
 })();

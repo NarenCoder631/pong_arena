@@ -22,6 +22,7 @@
       </button>
 
       <div class="nav-links" id="nav-links">
+        <button class="nav-button" type="button" data-start-classic>Classic Mode</button>
         <button class="nav-button" type="button" data-start-endless>Endless Mode</button>
         <button class="nav-button" type="button" data-sound-toggle aria-pressed="true">Sound: On</button>
         <a href="#features">Features</a>
@@ -39,6 +40,7 @@
         <p class="tagline">Create and manage ping pong tournaments with sleek brackets, live score tracking, and winner history built for competitive play.</p>
 
         <div class="hero-actions">
+          <button class="button button-secondary" type="button" data-start-classic>Classic Mode</button>
           <button class="button button-primary" type="button" data-start-endless>Endless Mode</button>
           <button class="button button-secondary" type="button" data-create-tournament>Create Tournament</button>
           <a class="button button-secondary" href="#how-it-works">How It Works</a>
@@ -172,6 +174,93 @@
         <div class="control-strip">
           <span>Move: W/S or Arrow Keys</span>
           <span>Endless ends when you miss</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="game-screen" data-classic-difficulty-screen hidden>
+      <div class="game-shell">
+        <div class="game-topbar">
+          <div>
+            <p class="eyebrow">Classic Mode</p>
+            <h2>Choose Your Difficulty</h2>
+          </div>
+
+          <button class="button button-secondary compact-button" type="button" data-classic-difficulty-back>Back</button>
+        </div>
+
+        <div class="feature-grid difficulty-grid">
+          <button class="feature-card difficulty-card" type="button" data-classic-difficulty-select="easy">
+            <span class="feature-icon" aria-hidden="true">○</span>
+            <h3>Easy</h3>
+            <p>Slower AI reactions and more mistakes. A relaxed match to warm up.</p>
+          </button>
+
+          <button class="feature-card difficulty-card" type="button" data-classic-difficulty-select="medium">
+            <span class="feature-icon" aria-hidden="true">◐</span>
+            <h3>Medium</h3>
+            <p>Balanced AI tracking. The traditional Pong Arena challenge.</p>
+          </button>
+
+          <button class="feature-card difficulty-card" type="button" data-classic-difficulty-select="hard">
+            <span class="feature-icon" aria-hidden="true">●</span>
+            <h3>Hard</h3>
+            <p>Faster, more accurate AI. Tough, but still fair to beat.</p>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="game-screen" data-classic-screen hidden>
+      <div class="game-shell">
+        <div class="game-topbar">
+          <div>
+            <p class="eyebrow">Classic Mode</p>
+            <h2>First to 11</h2>
+          </div>
+
+          <div class="game-stats game-stats--two" aria-label="Classic Mode score">
+            <div>
+              <span>Player</span>
+              <strong data-classic-player-score>0</strong>
+            </div>
+            <div>
+              <span>AI</span>
+              <strong data-classic-ai-score>0</strong>
+            </div>
+          </div>
+
+          <button class="button button-secondary compact-button" type="button" data-classic-main-menu>Main Menu</button>
+        </div>
+
+        <div class="court-wrap">
+          <canvas class="pong-court" data-classic-canvas width="960" height="540" aria-label="Classic Mode Pong game"></canvas>
+
+          <div class="game-over" data-classic-game-over hidden>
+            <div class="game-over-card">
+              <p class="eyebrow" data-classic-result-label></p>
+              <h2 data-classic-result>YOU WIN</h2>
+              <div class="result-grid">
+                <div>
+                  <span>Your Score</span>
+                  <strong data-classic-final-player>0</strong>
+                </div>
+                <div>
+                  <span>AI Score</span>
+                  <strong data-classic-final-ai>0</strong>
+                </div>
+              </div>
+              <div class="game-over-actions">
+                <button class="button button-primary" type="button" data-classic-play-again>Play Again</button>
+                <button class="button button-secondary" type="button" data-classic-main-menu>Main Menu</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-strip">
+          <span>Move: W/S or Arrow Keys</span>
+          <span>First to 11 points wins</span>
         </div>
       </div>
     </section>
