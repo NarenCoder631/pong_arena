@@ -107,6 +107,7 @@ const SFX = (function () {
         { freq: 659.25, duration: 0.09, type: "square", gain: 0.18 },
         { freq: 783.99, duration: 0.14, type: "square", gain: 0.2 },
       ]),
+    losePoint: () => tone({ freq: 300, duration: 0.12, type: "triangle", gain: 0.1, glideTo: 160 }),
     powerCharge: () => tone({ freq: 900, duration: 0.04, type: "sine", gain: 0.06 }),
     powerReady: () =>
       sequence([
@@ -810,14 +811,13 @@ const DIFFICULTY_PRESETS = {
    Classic Mode — Traditional Pong
    Fully self-contained: its own canvas, its own state, its own loop.
    Does not read from or write to the Endless Mode engine above, so it
-   cannot affect Endless Mode's behavior. It reuses two shared things
-   only: the SFX module, and the shared DIFFICULTY_PRESETS object
-   (same Easy/Medium/Hard AI settings Endless uses). The paddle/ball
-   physics formulas are re-implemented locally (not imported from the
-   Endless engine) so this new mode can never regress it.
-   DOM hooks: [data-start-classic] (x2), [data-classic-difficulty-screen],
-   [data-classic-difficulty-select] (x3), [data-classic-difficulty-back],
-   [data-classic-screen], [data-classic-canvas], [data-classic-player-score],
+   cannot affect Endless Mode's behavior. It reuses only the SFX module;
+   it does NOT read the shared DIFFICULTY_PRESETS object — Classic is a
+   single fixed, standardized Pong experience with no difficulty choice.
+   The paddle/ball physics formulas are re-implemented locally (not
+   imported from the Endless engine) so this mode can never regress it.
+   DOM hooks: [data-start-classic] (x2), [data-classic-screen],
+   [data-classic-canvas], [data-classic-player-score],
    [data-classic-ai-score], [data-classic-main-menu] (x2),
    [data-classic-game-over], [data-classic-result], [data-classic-result-label],
    [data-classic-final-player], [data-classic-final-ai], [data-classic-play-again]
@@ -835,10 +835,6 @@ const DIFFICULTY_PRESETS = {
   const startButtons = document.querySelectorAll("[data-start-classic]");
   const mainMenuButtons = document.querySelectorAll("[data-classic-main-menu]");
 
-  const difficultyScreen = document.querySelector("[data-classic-difficulty-screen]");
-  const difficultyButtons = document.querySelectorAll("[data-classic-difficulty-select]");
-  const difficultyBackButton = document.querySelector("[data-classic-difficulty-back]");
-
   const playerScoreEl = document.querySelector("[data-classic-player-score]");
   const aiScoreEl = document.querySelector("[data-classic-ai-score]");
   const gameOverEl = document.querySelector("[data-classic-game-over]");
@@ -855,6 +851,14 @@ const DIFFICULTY_PRESETS = {
   const PADDLE_EDGE_GAP = BALL_RADIUS - 2;
   const MAX_BOUNCE_ANGLE = (55 * Math.PI) / 180;
 
+  // Classic Mode is one fixed, standardized experience — no difficulty
+  // selection, and no reference to the shared DIFFICULTY_PRESETS object
+  // (that stays Endless Mode's own). CLASSIC_BALL_SPEED is medium's old
+  // 320 baseline increased ~70%, the faster value already agreed on.
+  const CLASSIC_BALL_SPEED = 544;
+  const CLASSIC_AI_SPEED = 230;
+  const CLASSIC_AI_ERROR = 46;
+
   const styles = getComputedStyle(document.documentElement);
   const colors = {
     line: styles.getPropertyValue("--line").trim() || "rgba(246,251,248,0.13)",
@@ -867,7 +871,6 @@ const DIFFICULTY_PRESETS = {
     active: false,
     width: 0,
     height: 0,
-    difficulty: "medium",
     playerScore: 0,
     aiScore: 0,
     nextServe: "player",
@@ -878,10 +881,6 @@ const DIFFICULTY_PRESETS = {
     lastTime: 0,
     rafId: null,
   };
-
-  function currentDifficulty() {
-    return DIFFICULTY_PRESETS[state.difficulty] || DIFFICULTY_PRESETS.medium;
-  }
 
   function resizeCanvas() {
     const rect = canvas.getBoundingClientRect();
@@ -899,11 +898,10 @@ const DIFFICULTY_PRESETS = {
     state.ai.y = Math.min(state.ai.y, rect.height - state.ai.height - PADDLE_EDGE_GAP);
   }
 
-  // Ball speed stays fixed at the chosen difficulty's starting speed for
-  // the whole match — no Endless-style rally ramp, per spec ("keep the
-  // ball speed balanced... reset normally after each point").
+  // Ball speed is always CLASSIC_BALL_SPEED — fixed, no ramp, no
+  // difficulty — reset to this same value on every serve.
   function serveBall(towardPlayer) {
-    const { ballSpeed } = currentDifficulty();
+    const ballSpeed = CLASSIC_BALL_SPEED;
     const angle = (Math.random() * 2 - 1) * (Math.PI / 6);
     const direction = towardPlayer ? -1 : 1;
     state.ball.x = state.width / 2;
@@ -975,7 +973,7 @@ const DIFFICULTY_PRESETS = {
       state.aiScore += 1;
       aiScoreEl && (aiScoreEl.textContent = String(state.aiScore));
     }
-    SFX.play("bonusScore");
+    SFX.play(winner === "player" ? "bonusScore" : "losePoint");
 
     if (state.playerScore >= WIN_SCORE || state.aiScore >= WIN_SCORE) {
       endMatch(winner);
@@ -989,7 +987,9 @@ const DIFFICULTY_PRESETS = {
   }
 
   function update(dt) {
-    const { aiSpeed, aiError, ballSpeed } = currentDifficulty();
+    const aiSpeed = CLASSIC_AI_SPEED;
+    const aiError = CLASSIC_AI_ERROR;
+    const ballSpeed = CLASSIC_BALL_SPEED;
 
     updatePlayer(dt);
     updateAI(dt, aiSpeed, aiError);
@@ -1118,17 +1118,7 @@ const DIFFICULTY_PRESETS = {
     gameOverEl && gameOverEl.removeAttribute("hidden");
   }
 
-  function openDifficultyScreen() {
-    document.body.classList.add("game-active");
-    classicScreen.setAttribute("hidden", "");
-    gameOverEl && gameOverEl.setAttribute("hidden", "");
-    difficultyScreen && difficultyScreen.removeAttribute("hidden");
-  }
-
-  function startMatch(difficulty) {
-    state.difficulty = difficulty;
-
-    difficultyScreen && difficultyScreen.setAttribute("hidden", "");
+  function startMatch() {
     document.body.classList.add("game-active");
     classicScreen.removeAttribute("hidden");
     gameOverEl && gameOverEl.setAttribute("hidden", "");
@@ -1145,29 +1135,15 @@ const DIFFICULTY_PRESETS = {
     stopLoop();
     gameOverEl && gameOverEl.setAttribute("hidden", "");
     classicScreen.setAttribute("hidden", "");
-    difficultyScreen && difficultyScreen.setAttribute("hidden", "");
     document.body.classList.remove("game-active");
   }
 
   startButtons.forEach((button) => {
     button.addEventListener("click", () => {
       SFX.play("uiClick");
-      openDifficultyScreen();
+      startMatch();
     });
   });
-
-  difficultyButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      SFX.play("uiClick");
-      startMatch(button.dataset.classicDifficultySelect);
-    });
-  });
-
-  difficultyBackButton &&
-    difficultyBackButton.addEventListener("click", () => {
-      SFX.play("uiClick");
-      exitToMainMenu();
-    });
 
   mainMenuButtons.forEach((button) => {
     button.addEventListener("click", () => {
